@@ -1,0 +1,35 @@
+Y88b   d88P                888       888           .d8888b.                    
+ Y88b d88P                 888   o   888          d88P  Y88b                   
+  Y88o88P                  888  d8b  888          888    888                   
+   Y888P  .d88b.  .d8888b  888 d888b 888  .d88b.  888         .d88b.  88888b.  
+    888  d8P  Y8b 88K      888d88888b888 d8P  Y8b 888  88888 d8P  Y8b 888 "88b 
+    888  88888888 "Y8888b. 88888P Y88888 88888888 888    888 88888888 888  888 
+    888  Y8b.          X88 8888P   Y8888 Y8b.     Y88b  d88P Y8b.     888  888 
+    888   "Y8888   88888P' 888P     Y888  "Y8888   "Y8888P88  "Y8888  888  888 
+
+
+YesWeGen non è il classico shellcode generator ma è un progetto che punta a offrire
+la maggiore ottimizzazione e versatilità dello shellcode generato, con una vasta serie
+di opzioni utilizzabili.
+Essendo questa la prima versione del programma non vi è una completa facilità d'uso
+del programma; è consigliata per chi volesse farne un uso corretto la lettura della documentazione.
+
+La documentazione è organizzata in tre parti:
+
+1. La prima parte illustra la generazione del classico shellcode e le opzioni correlate.
+
+2. La seconda parte illustra la generazione di uno shellcode polimorfico ASCII printable
+   che sfrutta una tecnica escogitata dagli autori e che consente una minore lunghezza 
+   dello shellcode stesso.
+
+3. La terza parte illustra il metodo classico utilizzato dagli shellcode polimorfici
+   per costruire uno shellcode nello stack ed eseguirlo.
+
+
+Per qualunque chiarimento, consiglio, critica (costruttiva possibilmente :-) o segnalazione di
+eventuali errori contattare gli autori tramite email:
+
+	certaindeath				darkjoker
+	certaindeath00@gmail.com		darkjoker93@gmail.com
+
+

@@ -1,0 +1,107 @@
+ Y88b d88P                 888   o   888          d88P  Y88b                   
+  Y88o88P                  888  d8b  888          888    888                   
+   Y888P  .d88b.  .d8888b  888 d888b 888  .d88b.  888         .d88b.  88888b.  
+    888  d8P  Y8b 88K      888d88888b888 d8P  Y8b 888  88888 d8P  Y8b 888 "88b 
+    888  88888888 "Y8888b. 88888P Y88888 88888888 888    888 88888888 888  888 
+    888  Y8b.          X88 8888P   Y8888 Y8b.     Y88b  d88P Y8b.     888  888 
+    888   "Y8888   88888P' 888P     Y888  "Y8888   "Y8888P88  "Y8888  888  888 
+
+
+1.
+La tecnica di generazione dello shellcode "basilare" (da ora chiameremo così lo shellcode trattato in questa sezione)
+non è quella vastamente utilizzata che utilizza una call per memorizzare l'indirizzo della stringa che contiene il comando.
+
+Stiamo parlando del sistema ben noto a chiunque si sia cimentato nello shellcode writing:
+
+	.global main
+main:
+	.... //istruzioni iniziali
+	jmp two
+one:
+	..... //altre istruzioni per preparare la system call execve()
+	int $0x80
+two:
+	call one
+	.string "echo Hello World"
+	
+
+Questo sistema, seppure è efficace nella maggior parte dei casi ha un limite:
+è infatti neccesaria la presenza di un byte NULL alla fine dello shellcode.
+Questo non viene mai inserito (infatti uno shellcode non deve contenere byte nulli)
+ma è comunque neccessario per l'esecuzione corretta dello shellcode, dato che senza di esso
+il comando verrebbe esteso fino al successivo byte nullo nello stack.
+Questo byte null in molti casi è presente di default dopo il comando
+(dato che nello stack le variabili sono inizializzate a 0x00 e anche nelle variabili globali è
+sempre presente il byte nullo, inserito di default)e perciò lo shellcode funziona.
+E' tuttavia possibile (e non così improbabile) che in una situazione di overflow nello stack non sia presente
+un byte null al termine della stringa del comando e questo non permetterebbe l'esecuzione corretta del comando, ma
+ritornerebbe un errore.
+
+
+
+[//schemozzo illustrativo e log dimostrativi di gdb]
+
+
+In YesWeGen abbiamo utilizzato una tecnica differente che utilizza lo stack per memorizzare il comando e la shell da
+utilizzare per eseguirlo (default /bin/bash).
+In questo modo lo shellcode viene sempre eseguito correttamente ed è possibile far specificare all'utente la shell che
+preferisce, oltre al comando.
+Utilizzando questa tecnica poi abbiamo ottenuto una buona ottimizzazione a livello di lunghezza di byte riuscendo,
+con comandi di lunghezza inferiore a 25 byte a generare shellcode più corti di quelli ottenuti con la tecnica classica.
+Un'ulteriore vantaggio è dato dal fatto che l'altra tecnica di generazione degli shellcode è ampiamente utilizzata
+e gli IDS si sono facilmente adeguati al riconoscimento di byte tipici e sempre presenti nel primo tipo di shellcode,
+con la seconda tecnica si evitano questo tipo di controlli che sono i più basilari applicati dagli IDS.
+
+(per il bypass di IDS più seri, che permettono solo stringhe in caratteri stampabili vedere le altre due sezioni della
+documentazione rigurardanti gli shellcode ASCII-printable).
+
+Per fornire un esempio del funzionamento dello shellcode generato dal programma includiamo qui il codice assembly di
+uno shellcode che esegue il comando "ls" (lunghezza: 40 bytes).
+
+(sintassi GAS)
+
+.global _start
+_start:
+        xor    %eax,%eax
+        push    %eax
+        pushw   $0x736c
+        mov     %esp,%edx
+        push    %eax
+        pushw   $0x632d
+        mov     %esp,%ecx
+        push    $0x68
+        pushw   $0x732f
+        push    $0x6e69622f
+        mov     %esp,%ebx
+        push    %eax
+        push    %edx
+        push    %ecx
+        push    %ebx
+        mov     %esp,%ecx
+        cdq
+        mov     $0xb,%al
+        int     $0x80
+
+Le opzioni che si possono utilizzare nella generazione del programma sono:
+
+--setuid  Con questa opzione il programma include nello shellcode generator l'esecuzione di un setreuid(0,0)
+	  prima dell'esecuzione del programma (real ed effective uid vengono settati a 0).
+	  Questo consente di eseguire il comando dello shellcode come root se l'owner del programma vulnerabile
+	  che si sta sfruttando è root.
+	  [!!]ATTENZIONE: se il setreuid(0,0) non va a buon fine questo comprometterà l'esecuzione del comando
+			  in questo caso per eseguire lo shellcode correttamente è necessario non utilizzare
+			  l'opzione --setuid
+--shellpath path
+	  Con questa opzione il programma utilizza la shell al percorso "path" al posto di quella di default
+	  (/bin/sh) con l'opzione -c per eseguire il comando.
+	  Ins sostanza viene eseguito "[path] -c comando".
+
+-a	  Con questa opzione viene stampato il codice assembly dello shellcode generato.
+
+-r	  Con questa opzione lo shellcode viene stampato in modalità "raw" ("grezzo") ossia in formato di stringa
+	  per esempio in modo che si possa usare il programma inline per sfruttare un buffer overflow ad esempio:
+
+	   ./bof `perl -e 'print "\x90" x900'` `generator -r command` `--return address--`
+
+--test	  Conquesta opzione oltre ad essere generato lo shellcode 
+

