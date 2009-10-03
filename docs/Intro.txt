@@ -11,8 +11,8 @@ Y88b   d88P                888       888           .d8888b.
 YesWeGen non è il classico shellcode generator ma è un progetto che punta a offrire
 la maggiore ottimizzazione e versatilità dello shellcode generato, con una vasta serie
 di opzioni utilizzabili.
-Essendo questa la prima versione del programma non vi è una completa facilità d'uso
-del programma; è consigliata per chi volesse farne un uso corretto la lettura della documentazione.
+Essendo questa la prima versione del programma non vi è una completa facilità d'uso;
+è consigliata per chi volesse farne un uso corretto la lettura della documentazione.
 
 La documentazione è organizzata in tre parti:
 
@@ -23,7 +23,7 @@ La documentazione è organizzata in tre parti:
    dello shellcode stesso.
 
 3. La terza parte illustra il metodo classico utilizzato dagli shellcode polimorfici
-   per costruire uno shellcode nello stack ed eseguirlo.
+   ASCII printable per costruire uno shellcode nello stack ed eseguirlo.
 
 
 Per qualunque chiarimento, consiglio, critica (costruttiva possibilmente :-) o segnalazione di
