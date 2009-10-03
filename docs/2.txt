@@ -1,0 +1,61 @@
+Y88b   d88P                888       888           .d8888b.
+ Y88b d88P                 888   o   888          d88P  Y88b
+  Y88o88P                  888  d8b  888          888    888
+   Y888P  .d88b.  .d8888b  888 d888b 888  .d88b.  888         .d88b.  88888b. 
+    888  d8P  Y8b 88K      888d88888b888 d8P  Y8b 888  88888 d8P  Y8b 888 "88b
+    888  88888888 "Y8888b. 88888P Y88888 88888888 888    888 88888888 888  888
+    888  Y8b.          X88 8888P   Y8888 Y8b.     Y88b  d88P Y8b.     888  888
+    888   "Y8888   88888P' 888P     Y888  "Y8888   "Y8888P88  "Y8888  888  888
+
+
+2.
+Come contromisura per gli shellcode gli IDS limitano i catatteri accettabili a quelli che sono
+stampabili, che vengono chiamati "ASCII printable".
+Questo cambia il range dei caratteri che si possono inserire in un buffer di un programma vulnerabile
+da 0x00-0xff a 0x20-0x7e.
+Questo riduce a meno della metà il numero dei byte(opcode) utilizzabili per comporre uno shellcode.
+La cosa importante però è che questa riduzione costringe a cambiare completamente il modo il cui lo shellcode
+funziona.
+Questo perchè, sebbene la maggior parte delle istruzioni assembly con opcode non ASCII printable possano
+essere sostituite con una combonazione di altre ASCII printable, ce n'è una in partcolare che è fondamentale
+e non può in alcun modo essere sostituita da altre ASCII printable.
+Si tratta del'instruzione "int $0x80" che in assembly linux-x86 corrisponde alla chiamata del kernel che esegue
+la syscall.
+
+La sfida quindi di creare uno shellcode composto solamente di caratteri stampabili va quindi risolta cambiando
+completamente la natura dello shellcode.
+Un metodo largamente usato è quello di sfruttare uno shellcode polimorfico ASCII printable.
+Questa tecnica è implementata in YesWeGen ed è descritta nella sezione 3 della documentazione.
+
+Per la normale generazione di shellcode ASCII printable tuttavia in YesWeGen abbiamo escogitato
+una tecnica particolare che è molto migliore della prima in termini di lunghezza totale dello shellcode.
+Abbiamo sostituito le istruzioni del normale shellcode(quello descritto nella sez. 1) con la combinazione
+di altre ASCII printable (ad esempio mov è sostituita da un push e un pop), mentre per "int $0x80" abbiamo
+utilizzato il seguente metodo:
+
+
+//preparazione della execve con instruzioni ascii stampabili
+//....
+//metodo per eseguire "int $0x80"
+
+sub    $0x20796f7c,%eax		//opportune sottrazioni per ottenere
+sub    $0x306f4364,%eax		//il valore 0x80cd0bb0 nello stack
+sub    $0x2e4a4170,%eax
+push   %eax			//nello stack vengono inseriti i byte "b0 0b cd 80" (movb $11, %al int $0x80)
+and    $0x35483f40,%eax		//eax viene azzerato
+and    $0x4221402e,%eax
+xor    $0x27,%al		//si sfrutta un jump short condizionato (l'unico tipo di jmp ASCII pritable)
+cmp    $0x27,%al		//per saltare in avanti ed eseguire le istruzioni pushate nello stack
+je     0x804958d
+
+Ebbene non è un salto alla cieca nello stack, anche se così può sembrare, perchè in YesWeGen il numero di byte
+di cui saltare in avanti è definito dall'utente con l'opzione -j.
+Certo questo deve essere ASCII pritable e quindi compreso tra 32 e 126, ma utilizzando l'opzione -s è possibile
+fare in modo che lo shellcode all'inizio sposti di quanti byte si vuole esp.
+In questo modo è sempre possibile con le opzioni -j e -s fare in modo che lo shellcode funzioni.
+
+Scegliendo i parametri opportunamente è sempre possibile far funzionare correttamente questo tipo di shellcode
+ASCII printable.
+
+Nelle prossime versioni del programma implementeremo delle funzioni che calcolano correttamente i parametri j ed s
+fornita in input la distanza tra la variabile vulnerabile ed %esp prima dell'overflow (facilmente ottenibile con un debug).
