@@ -1,0 +1,186 @@
+Y88b   d88P                888       888           .d8888b.
+ Y88b d88P                 888   o   888          d88P  Y88b
+  Y88o88P                  888  d8b  888          888    888
+   Y888P  .d88b.  .d8888b  888 d888b 888  .d88b.  888         .d88b.  88888b. 
+    888  d8P  Y8b 88K      888d88888b888 d8P  Y8b 888  88888 d8P  Y8b 888 "88b
+    888  88888888 "Y8888b. 88888P Y88888 88888888 888    888 88888888 888  888
+    888  Y8b.          X88 8888P   Y8888 Y8b.     Y88b  d88P Y8b.     888  888
+    888   "Y8888   88888P' 888P     Y888  "Y8888   "Y8888P88  "Y8888  888  888
+
+
+3.
+Uno shellcode polimorfico è un tipo speciale di shellcode, il quale compito è quello di "costruirsi" nello stack, e poi modificare l'esecuzione del programma in modo da continuare a eseguire le istruzioni inserite nello stack. In questo modo, nello shellcode polimorfico non sono presenti alcuni opcode che molti IDS riconoscono, come 0xcd 0x80 (int $0x80, l'istruzione che effettua una syscall). 
+Lo svantaggio è che, nella maggior parte dei casi, uno shellcode polimorfico è piu lungo di uno shellcode normale, quindi, dove possibile, conviene utilizzare quelli tradizionali ma, a causa di IDS sempre piu all'avanguardia l'utilizzo di shellcode polimorfici sta diventando quasi un'obbligo per attacchi veri e propri e non per semplici simulazioni. 
+Proprio a causa della tecnologia degli IDS sono nati gli shellcode polimorfici ASCII-printable, ossia shellcode polimorfici formati solo da caratteri ascii stampabili, ossia a partire dallo spazio (0x20) finendo con ~ (0x7e). Quest'ulteriore innovazione consente il bypass di quasi tutti gli IDS, proprio perchè lo shellcode viene interpretato come una normale stringa.
+Ovviamente per la generazione di shellcode ascii-printable ci sono alcune limitazioni, in quanto non tutti gli opcode sono printabili (anzi, solo una piccola parte), per esempio:
+
+push	%eax
+pop	%eax
+push	%esp
+pop	%esp
+sub	$val, %eax
+and	$val, %eax
+
+Ovviamente, con qualche accorgimento, è possibile generare shellcode solo con questi 6 opcode.
+
+1. Pulizia del registro EAX.
+Ovviamente, quando uno shellcode viene "inniettato" il programma vulnerabile si trova già ad un certo punto del suo percorso, quindi non possiamo sapere a che valore si trova il registro %eax.
+Per questo motivo lo azzeriamo, in modo da sapere esattamente il suo valore, che ci tornerà piu utile avanti.
+Per azzerarlo in precedenza abbiamo usato il classico
+
+xor	%eax, %eax
+
+Che però non possiamo piu utilizzare, visto che l'opcode di xor è fuori dai limiti che abbiamo imposto (0x20-0x7e).
+Per questo motivo utilizzeremo una coppia di AND.
+Se prendiamo due numeri in formato binario, senza che, ovviamente, ci siano 2 bit uguali a 1 nella stessa "posizione", il risultato dell'AND dei due numeri sarà sempre 0; per esempio:
+
+010101001110101101010 and
+101010000001010010001
+--------------------------
+000000000000000000000
+
+Ovviamente però nel nostro caso i due numeri che dovremo ANDare tra loro devono essere compresi tra 0x20202020 e 0x7e7e7e7e, e, se ANDeremo i due numeri con 0xff000000,0x00ff0000,0x0000ff00 e 0x000000ff, i risultati dovranno essere ovviamente all'interno del limite che abbiamo imposto per i caratteri printabili. Questo significa semplicemente che un numero come 0x204f5573 sarà accettato, mentre 0xff4f5510 non andrà bene.
+Una volta ottenuti i nostri 2 numeri possiamo ANDarli tra loro e pulire cosi il registro EAX.
+
+and    $0x50505050,%eax
+and    $0x2f2f2f2f,%eax
+
+Gli opcode corrispondenti sono quindi:
+
+\x25\x50\x50\x50\x50\x25\x2f\x2f\x2f\x2f, ossia %PPPP%////.
+In questo modo lo shellcode "%PPPP%////" azzera il registro EAX. Occupa più di un semplice xor, però, come già spiegato prima, è una questione di accettazione dello shellcode.
+Ovviamente i due valori utilizzati per l'and sono calcolati casualmente, non sono fissi in modo da non dare agli IDS un possibile metodo di riconoscimento degli shellcode generati con YesWeGen.
+
+Una volta azzerato il registro eax possiamo iniziare, dobbiamo però prima vedere come dovrà funzionare lo shellcode polimorfico.
+Come abbiamo visto lo shellcode dovrà essere PUSHato nello stack, in questo modo quando il codice che carica lo shellcode incontra l'indirizzo di ESP lo shellcode viene eseguito.
+Si dovrà però quasi sempre spostare l'ESP in avanti, ossia aggiungergli un certo numero, in modo che possa contenere tutto lo shellcode e poi, con una nop sled, "raggiungere" l'EIP.
+Per aggiungere un numero a ESP si dovrebbe usare un classico:
+
+add	$val, %esp
+
+Solo che, non essendo l'opcode add printabile, bisogna ricorrere alle sottrazioni.
+Con le sottrazioni è possibile incrementare un registro facendolo passare passare per la "barriera" dello 0. Se abbiamo un registro che contiene 0x00000000 e gli sottraiamo 0x01 il registro conterrà 0xffffffff. In questo modo è possibile ottenere qualsiasi valore solo utilizzando le sub, che sono printabili per quanto riguarda il registro EAX.
+
+Mettiamo caso che dobbiamo portare il registro EAX da 0 a 500 utilizzando solo opcode printabili.
+
+La cosa più ovvia sarebbe un:
+
+sub	$0xfffffe0c,%eax
+
+Solo che l'opcode relativo sarebbe \x2d\x0c\xfe\xff\xff, che non è printabile.
+Dobbiamo quindi dividere la sub in diverse sub, in modo che tutti i valori sottratti siano compresi tra 0x20 e 0x7e, quindi, per esempio:
+
+sub	$0x25242926,%eax
+sub	$0x7a707273,%eax
+sub	$0x606B6273,%eax
+
+In questo modo il registro EAX, partendo da 0 è arrivato a 500 utilizzando solo delle sub, e gli opcode relativi sarebbero:
+
+\x2d\x26\x29\x24\x25\x2d\x73\x72\x70\x7a\x2d\x73\x62\x6b\x60 ossia -&)$%-srpz-sbk`
+
+Quindi lo shellcode %PPPP%////-&)$%-srpz-sbk` serve per portare EAX a 500, ma abbiamo detto che dev'essere il registro ESP ad avere tale valore, ma, purtroppo, l'opcode relativo a sub	$val,%esp non è printabile...
+Ovviamente si può fare una cosa del genere:
+
+push	%esp
+pop	%eax
+sub	$0x25242926,%eax
+sub	$0x7a707273,%eax
+sub	$0x606B6273,%eax
+push	%eax
+pop	%esp
+
+I numeri utilizzati, come spiegato prima, sono generati sempre casualmente, per il motivo sopra citato.
+
+Vediamo ora uno schema di come lavora lo shellcode polimorfico.
+
+1. Viene azzerato il registro eax e spostato avanti (o indietro) esp:
+ 
+ EIP                
+ |_____________                                                            ESP
+ |             |                                                           |
+ |   BUILDER   |#######STACK##########STACK############STACK###############
+ |_____________|
+
+
+ EIP                
+ |_____________                                        ESP
+ |             |                                       |
+ |   BUILDER   |#######STACK##########STACK############
+ |_____________|
+
+
+
+2. Viene costruito lo shellcode nello stack, attraverso lo stesso metodo delle sottrazioni viste prima:
+   con successive sottrazioni si ottengono i valori desiderati nel registro eax e successivamente questi vengono
+   spinti nello stack.
+   L'algoritmo che calcola quali sottrazioni fare per ottenere un qualunque valore desiderato è stato inventato dagli
+   autori.
+   Naturalmente nella quasi totalità di casi ci sono diversi valori che vanno bene per ottenere un valore,
+   il programma sceglie a caso tra uno di questi.
+
+        EIP                               ESP
+  ______|______                           |_____________  
+ |             |                          |  SHELLCODE  |
+ |   BUILDER   |#######STACK#######STACK##|    BEING    |
+ |_____________|                          |____BUILT____|
+
+
+
+
+3. Terminata la costruzione dello shellcode nello stack, se esp è stato spostato correttamente (cfr. fase 1)
+   il builder e lo shellcode costruito si trovano a contatto nello stack e terminato uno, inizia l'esecuzione dell'altro.
+   E' possibile inoltre con un parametro del programma fare in modo che il builder al termine della costruzione
+   dello shellcode nello stack crei un "ponte" di NOP, in pratica il builder spinge nello stack un numero variabile
+   di NOP (definite dall'utente).
+   Così è possibile fare in modo che lo shellcode venga eseguito anche se non si conosce la precisa distanza iniziale tra
+   %esp e il builder: è sufficiente aggiungere un numero sempre più alto di NOP.
+
+               EIP=ESP
+  _____________|_____________
+ |             |  SHELLCODE  |
+ |   BUILDER   |    BUILT    |                (primo caso: esp è stato spostato perfettamente conoscendo la distanza
+ |_____________|_____________|                 tra il builder ed esp)
+
+ 
+
+
+            EIP            ESP
+  __________|__            |_____________ _____________
+ |             |           |     NOP     |  SHELLCODE  |
+ |   BUILDER   |###STACK###|    BEING    |    BUILT    |
+ |_____________|           |____PUSHED___|_____________|
+
+               EIP=ESP                                   (secondo caso: se non si conosce bene di quando è necesario
+  _____________|_____________ _____________               spostare esp si può utilizzare l'opzione -n per specificare
+ |             |     NOP     |  SHELLCODE  |              quanti NOP utilizzare come "ponte" per eseguire lo shellcode
+ |   BUILDER   |   PUSHED    |    BUILT    |              costruito nello stack.Sarà sufficiente un numero abbastanza
+ |_____________|_____________|_____________|              grande per far eseguire correttamente lo shellcode)
+
+
+Questo metodo di generazione è usato normalmente dal programma solamente quando deve convertire uno shellcode preso
+in input in polimorfico ASCII-printable; questo perchè si preferisce l'utilizzo dell'altra tecnica per gli ASCII printable
+(descritta nella sezione 2) che è generalmente meglio (lo shellcode finale occupa meno spazio).
+E' possibile comunque fare in modo che il programma utilizzi questa tecnica per generare uno shellcode che esegue
+il comando passato in input, non specificando il parametro j e inserendo 0 quando viene richiesto in input.
+
+I parametri di questo tipo di generazione di shellcode sono:
+-s num sottrae num byte da esp, spostandolo verso il builder (num positivo) o allontanandolo dal builder (num negativo)
+
+-n num dopo aver costruito lo shellcode nello stack il builder costruisce il "nop bridge" pushando NOP byte nello stack.
+   ricordare: melius est abundare quam deficere, se anche il numero di NOP fosse maggiore di quelli che effettivamente
+   possono essere inseriti nello stack poco importerebbe: una volta spinti nello stack il numero necessario lo shellcode
+   verrebbe eseguito correttamente.
+   Una tecnica un po' triviale che tuttavia funzionerebbe sempre sarebbe quella di specificare sempre un numero di NOP
+   smisuratamente elevato, anche se questo penalizzerebbe la lunghezza dello shellcode.
+
+Per convertire uno shellcode qualsiasi in polimorfico ASCII printable si deve utilizzare l'opzione -c
+passando in input lo shellcode con la sintassi \\xff\\xff\\xff\\x31\\xc0 ecc. nei seguenti modi:
+
+YesWeGen -c \\xff\\xff...  oppure YesWeGen -c "\xff\xff..."
+
+passando con un pipe (lo shellcode deve comunque essere passato con la stessa sintassi)
+
+cat shellcode.txt | YesWeGen -c
+
+o eventualmente solo con
+YesWeGen -c e poi scrivendo lo shellcode da convertire alla rischiesta di input del programma.
