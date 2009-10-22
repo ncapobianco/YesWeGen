@@ -1,1 +1,4 @@
-Darkjoker and I are completing the programme to publish the 0.1 version
+To read the introduction and the documentation of YesWeGen go to docs/Intro.txt
+
+Compile the program simply with a 
+gcc -o YesWeGen YesWeGen.c
