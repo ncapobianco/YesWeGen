@@ -224,13 +224,7 @@ int main(int argc, char *argv[]) {
 			shellc = shc_gen (cmd, (shellpath ? shellpath:DEF_PATH), setuid, &l);
 			shellcode = shc2polyascprint (shellc, l, n, s);
 		}
-		// Mostra alcune informazioni sullo
-		// shellcode.. (da togliere?)
-		if (shellcode) {
-			printf ("Lunghezza: %i\n", strlen(shellcode));
-			if (j)
-				printf ("Byte pushati: %i\n", pushed_bytes(cmd, (shellpath ? shellpath:DEF_PATH)));
-		}
+
 		printf ("%s\n", (shellcode) ? shellcode : "Si è verificato un'errore durante la generazione dello shellcode.\n");
 	}
 	else if(code && !cmd[0]) {
